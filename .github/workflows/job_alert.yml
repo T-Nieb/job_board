@@ -30,21 +30,21 @@ jobs:
     - name: Run Western Cape Alert
       env:
         DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        PYTHONPATH: ${{ github.workspace }}
       run: |
-        cd "scrapers/western_cape"
-        python alert_manager.py
+        python src/alert_manager.py --province western_cape
 
     - name: Run Gauteng Alert
       env:
         DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        PYTHONPATH: ${{ github.workspace }}
       run: |
-        cd "scrapers/gauteng"
-        python alert_manager.py
+        python src/alert_manager.py --province gauteng
 
     - name: Commit and Push changes
       run: |
         git config --global user.name 'Job Alert Bot'
         git config --global user.email 'bot@noreply.github.com'
-        git add "scrapers/western_cape/seen_jobs.json" "scrapers/gauteng/seen_jobs.json"
+        git add "data/state/western_cape_seen.json" "data/state/gauteng_seen.json"
         # Only commit if there are changes
         git diff --quiet && git diff --staged --quiet || (git commit -m "Update seen jobs list" && git push)
