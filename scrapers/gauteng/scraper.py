@@ -53,29 +53,37 @@ def scrape_details(browser, link):
     return details
 
 def run():
+    all_jobs = []
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         context = browser.new_context(
             user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         )
-        # Create timestamped directory
-        timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        output_dir = os.path.join("data", timestamp)
-        os.makedirs(output_dir, exist_ok=True)
-        output_path = os.path.join(output_dir, "gauteng_jobs.json")
+        
+        output_path = None
+        if __name__ == "__main__":
+            # Create timestamped directory
+            timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+            output_dir = os.path.join("data", timestamp)
+            os.makedirs(output_dir, exist_ok=True)
+            output_path = os.path.join(output_dir, "gauteng_jobs.json")
+
         page = context.new_page()
 
         print(f"Navigating to {BASE_URL}...")
-        page.goto(BASE_URL, timeout=60000)
+        try:
+            page.goto(BASE_URL, timeout=60000)
+        except Exception as e:
+             print(f"Error navigating: {e}")
+             return []
         
         # Wait for table to load
         try:
             page.wait_for_selector("table#tblJobs", timeout=30000)
         except:
             print("Job table not found.")
-            return
+            return []
 
-        all_jobs = []
         page_num = 1
         
         while True:
@@ -88,7 +96,7 @@ def run():
             
             if count == 0:
                 break
-                
+            
             # Iterate over rows
             # Note: We extract data first to minimize interacting with the page loop
             current_page_jobs = []
@@ -133,7 +141,11 @@ def run():
             # Pagination Logic
             # Check for 'Next' button
             next_btn = page.locator("#tblJobs_next")
-            if next_btn.count() > 0 and not "disabled" in next_btn.get_attribute("class"):
+            # The class might be 'paginate_button next' or 'paginate_button next disabled'
+            # Use get_attribute("class") to check for 'disabled'
+            next_classes = next_btn.get_attribute("class")
+            
+            if next_btn.count() > 0 and next_classes and "disabled" not in next_classes:
                 print("Clicking Next...")
                 next_btn.click()
                 page_num += 1
@@ -150,11 +162,13 @@ def run():
                 print("No more pages.")
                 break
                 
-            # Save incrementally
-            with open(output_path, 'w', encoding='utf-8') as f:
-                json.dump(all_jobs, f, indent=2, default=str)
+            # Save incrementally if path is set
+            if output_path:
+                with open(output_path, 'w', encoding='utf-8') as f:
+                    json.dump(all_jobs, f, indent=2, default=str)
                 
     print(f"Done. Scraped {len(all_jobs)} jobs.")
+    return all_jobs
 
 if __name__ == "__main__":
     run()

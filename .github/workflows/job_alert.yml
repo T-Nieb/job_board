@@ -27,17 +27,24 @@ jobs:
         pip install playwright requests
         playwright install chromium
 
-    - name: Run Alert Manager
+    - name: Run Western Cape Alert
       env:
         DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
       run: |
         cd "scrapers/western_cape"
         python alert_manager.py
 
+    - name: Run Gauteng Alert
+      env:
+        DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+      run: |
+        cd "scrapers/gauteng"
+        python alert_manager.py
+
     - name: Commit and Push changes
       run: |
         git config --global user.name 'Job Alert Bot'
         git config --global user.email 'bot@noreply.github.com'
-        git add "scrapers/western_cape/seen_jobs.json"
+        git add "scrapers/western_cape/seen_jobs.json" "scrapers/gauteng/seen_jobs.json"
         # Only commit if there are changes
         git diff --quiet && git diff --staged --quiet || (git commit -m "Update seen jobs list" && git push)
