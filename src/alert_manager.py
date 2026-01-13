@@ -25,7 +25,7 @@ PROVINCE_CONFIG = {
         'scraper': gauteng,
         'name': 'Gauteng Health',
         'state_file': 'data/state/gauteng_seen.json',
-        'color': 3066993,
+        'color': 128, # Navy Blue
     },
     'mpumalanga': {
         'scraper': mpumalanga,
@@ -156,11 +156,13 @@ def main():
              # Use Link as primary ID for Gauteng
              job_id = job.get('link') or job.get('job_url')
         else:
-             # Use Title-Location for Western Cape
-             # Fallback to ref if available, but list view might not have it
-             t = job.get('title') or job.get('position') or "Unknown"
-             l = job.get('location') or "Unknown"
-             job_id = f"{t}-{l}"
+             # Use Reference Number for Western Cape if available
+             job_id = job.get('reference_number')
+             if not job_id:
+                  # Fallback to Title-Location
+                  t = job.get('title') or job.get('position') or "Unknown"
+                  l = job.get('location') or "Unknown"
+                  job_id = f"{t}-{l}"
         
         if not job_id:
              # Last resort
