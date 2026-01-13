@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.env
+
+# OS
+.DS_Store
+
+# Project Data
+# We want to properly ignore the large data dumps but keep the header structure if needed.
+# For now, let's ignore the timestamped data directories.
+data/*
+!data/.gitkeep
+
+# We definitely want to keep the state file for the alert system
+!scrapers/western_cape/seen_jobs.json
