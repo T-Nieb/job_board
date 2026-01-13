@@ -52,7 +52,7 @@ def scrape_details(browser, link):
         
     return details
 
-def run():
+def run(seen_ids=None):
     all_jobs = []
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
@@ -133,6 +133,12 @@ def run():
             # preventing interference with the main list page state
             for job in current_page_jobs:
                 if job['link']:
+                    # Check if already seen
+                    if seen_ids and job['link'] in seen_ids:
+                        print(f"  Skipping seen job: {job['position']}")
+                        all_jobs.append(job)
+                        continue
+
                     print(f"  Scraping details for: {job['position']}")
                     details = scrape_details(context, job['link'])
                     job.update(details)

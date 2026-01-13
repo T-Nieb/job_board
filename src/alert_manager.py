@@ -8,7 +8,7 @@ import sys
 # Add src to path if needed (though running as module is better)
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.scrapers import western_cape, gauteng
+from src.scrapers import western_cape, gauteng, mpumalanga
 
 # Configuration
 DISCORD_WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL")
@@ -26,6 +26,12 @@ PROVINCE_CONFIG = {
         'name': 'Gauteng Health',
         'state_file': 'data/state/gauteng_seen.json',
         'color': 3066993,
+    },
+    'mpumalanga': {
+        'scraper': mpumalanga,
+        'name': 'Mpumalanga Health',
+        'state_file': 'data/state/mpumalanga_seen.json',
+        'color': 15844367, # Gold/Yellow
     }
 }
 
@@ -43,50 +49,53 @@ def save_seen_jobs(filepath, seen_jobs):
     with open(filepath, "w") as f:
         json.dump(list(seen_jobs), f, indent=2)
 
-def send_discord_alert(job, config):
-    """Sends a notification to Discord."""
-    if not DISCORD_WEBHOOK_URL:
-        # Dry run log
-        title = job.get('title') or job.get('position') or "New Vacancy"
-        ref = job.get('reference_number') or "N/A"
-        print(f"Alert: New Job Found - {title} ({ref})")
+def send_new_jobs_summary(new_jobs, config):
+    """Sends a summary of new jobs to Discord."""
+    if not new_jobs:
         return
 
-    # Normalize fields (WC vs Gauteng differences)
-    title = job.get('title') or job.get('position') or "New Vacancy"
-    ref = job.get('reference_number') or "N/A"
-    link = job.get('job_url') or job.get('link')
-    location = job.get('location') or "Unknown"
+    count = len(new_jobs)
+    
+    if not DISCORD_WEBHOOK_URL:
+        # Dry run log
+        print(f"Summary: Found {count} new jobs.")
+        for job in new_jobs:
+             title = job.get('title') or job.get('position') or "New Vacancy"
+             print(f" - {title}")
+        return
+
+    # Build description
+    lines = []
+    # Limit to 15 jobs in the list to avoid hitting Discord limits
+    display_limit = 15
+    for i, job in enumerate(new_jobs[:display_limit]):
+        title = job.get('title') or job.get('position') or "New Vacancy"
+        link = job.get('job_url') or job.get('link') or "#"
+        location = job.get('location') or ""
+        
+        # Escape markdown characters in title if needed, but keeping it simple for now
+        line = f"• [{title}]({link})"
+        if location and location != "Unknown":
+            line += f" - {location}"
+        lines.append(line)
+        
+    if count > display_limit:
+        lines.append(f"\n... and {count - display_limit} more.")
+
+    description = "\n".join(lines)
 
     embed = {
-        "title": title,
-        "url": link,
+        "title": f"🚨 {count} New Jobs Found - {config['name']}",
+        "description": description,
         "color": config['color'],
-        "fields": [
-            {
-                "name": "Reference Number",
-                "value": ref,
-                "inline": True
-            },
-            {
-                "name": "Location",
-                "value": location,
-                "inline": True
-            },
-            {
-                "name": "Date Found",
-                "value": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
-                "inline": False
-            }
-        ],
         "footer": {
-            "text": f"{config['name']} Scraper"
+            "text": f"{config['name']} Scraper • {datetime.datetime.now().strftime('%Y-%m-%d %H:%M')}"
         }
     }
 
     try:
         requests.post(DISCORD_WEBHOOK_URL, json={"embeds": [embed]})
-        print(f"Sent Discord alert for {ref}")
+        print(f"Sent summary alert for {count} jobs.")
     except Exception as e:
         print(f"Failed to send Discord alert: {e}")
 
@@ -121,7 +130,7 @@ def send_daily_summary(job_count, config):
 
 def main():
     parser = argparse.ArgumentParser(description="Run Job Alerts")
-    parser.add_argument("--province", required=True, choices=['western_cape', 'gauteng'], help="Province to scrape")
+    parser.add_argument("--province", required=True, choices=['western_cape', 'gauteng', 'mpumalanga'], help="Province to scrape")
     args = parser.parse_args()
 
     config = PROVINCE_CONFIG[args.province]
@@ -133,29 +142,39 @@ def main():
 
     # 2. Run Scraper
     print("Running scraper...")
-    # Scrapers are expected to return a list of dicts
+    # Pass seen_ids to allow scrapers to skip existing jobs
     current_jobs = config['scraper'].run()
     print(f"Scraper returned {len(current_jobs)} jobs.")
 
     new_jobs_count = 0
+    new_jobs_found = []
 
     # 3. Process Jobs
     for job in current_jobs:
-        # Determine Unique ID
-        job_id = job.get('reference_number')
-        if not job_id:
-             job_id = job.get('link') # Gauteng fallback
-        if not job_id:
-             # Last resort composite
-             title = job.get('title') or job.get('position') or "Unknown"
-             loc = job.get('location') or "Unknown"
-             job_id = f"{title}-{loc}"
+        # Determine Unique ID based on province strategy
+        if args.province == 'gauteng':
+             # Use Link as primary ID for Gauteng
+             job_id = job.get('link') or job.get('job_url')
+        else:
+             # Use Title-Location for Western Cape
+             # Fallback to ref if available, but list view might not have it
+             t = job.get('title') or job.get('position') or "Unknown"
+             l = job.get('location') or "Unknown"
+             job_id = f"{t}-{l}"
         
+        if not job_id:
+             # Last resort
+             job_id = str(job)
+
         if job_id not in seen_ids:
             new_jobs_count += 1
             print(f"New Job Found: {job_id}")
-            send_discord_alert(job, config)
+            new_jobs_found.append(job)
             seen_ids.add(job_id)
+            
+    # 4. Send Summary Alert
+    if new_jobs_found:
+        send_new_jobs_summary(new_jobs_found, config)
 
     # 4. Save State
     if new_jobs_count > 0:
