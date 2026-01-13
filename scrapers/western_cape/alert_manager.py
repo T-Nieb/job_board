@@ -7,6 +7,7 @@ import scraper
 # Configuration
 SEEN_JOBS_FILE = "seen_jobs.json"
 DISCORD_WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL")
+DAILY_SUMMARY = os.environ.get("DAILY_SUMMARY") == "true"
 
 def load_seen_jobs():
     """Loads the list of previously seen job reference numbers."""
@@ -63,6 +64,39 @@ def send_discord_alert(job):
     except Exception as e:
         print(f"Failed to send Discord alert: {e}")
 
+def send_discord_summary(job_count):
+    """Sends a daily summary status report."""
+    if not DISCORD_WEBHOOK_URL:
+        print(f"Daily Summary: {job_count} jobs currently available.")
+        return
+
+    message = f"**Daily Status Report**\nThere are currently **{job_count}** vacancies listed on the Western Cape Health website."
+    if job_count == 0:
+        message = "**Daily Status Report**\nNo vacancies are currently available."
+        color = 15158332 # Red
+    else:
+        color = 3066993 # Green
+
+    embed = {
+        "title": "Daily Job Summary",
+        "description": message,
+        "color": color,
+        "footer": {
+            "text": "Western Cape Health Scraper"
+        },
+        "timestamp": datetime.datetime.now().isoformat()
+    }
+
+    payload = {
+        "embeds": [embed]
+    }
+
+    try:
+        requests.post(DISCORD_WEBHOOK_URL, json=payload)
+        print("Sent Daily Summary.")
+    except Exception as e:
+        print(f"Failed to send summary: {e}")
+
 def main():
     print("Starting Alert Manager...")
     
@@ -97,6 +131,10 @@ def main():
         print(f"Updated seen jobs list. {new_jobs_count} new jobs added.")
     else:
         print("No new jobs found.")
+
+    # 5. Daily Summary
+    if DAILY_SUMMARY:
+        send_discord_summary(len(current_jobs))
 
 if __name__ == "__main__":
     main()
